@@ -449,7 +449,7 @@ bool initializeGlobalFunctions(const codegen::FunctionRegistry& registry,
         if (!F.getName().startswith("ax.")) continue;
         const std::string mangled =
             getMangledName(llvm::cast<llvm::GlobalValue>(&F), engine);
-        [[maybe_unused]] const uint64_t address =
+        const uint64_t address =
             engine.getAddressToGlobalIfAvailable(mangled);
         OPENVDB_ASSERT(address != 0 && "Unbound function!");
     }

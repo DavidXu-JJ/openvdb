@@ -999,7 +999,7 @@ template<typename GridType>
 void
 TestLinearInterp::testStencilsMatch()
 {
-    using ValueType = typename GridType::ValueType;
+    typedef typename GridType::ValueType ValueType;
 
     GridType grid;
     typename GridType::TreeType& tree = grid.tree();
@@ -1022,13 +1022,14 @@ TestLinearInterp::testStencilsMatch()
         openvdb::tools::GridSampler<GridType, openvdb::tools::BoxSampler>
             interpolator(grid);
 
-        openvdb::math::BoxStencil<const GridType> stencil(grid);
+        openvdb::math::BoxStencil<const GridType>
+            stencil(grid);
 
-        const ValueType val1 = interpolator.sampleVoxel(pos.x(), pos.y(), pos.z());
+        typename GridType::ValueType val1 = interpolator.sampleVoxel(pos.x(), pos.y(), pos.z());
+
         stencil.moveTo(pos);
-        const ValueType val2 = stencil.interpolation(pos);
-        static const ValueType epsilon = openvdb::math::Delta<ValueType>::value();
-        EXPECT_NEAR(val1, val2, epsilon);
+        typename GridType::ValueType val2 = stencil.interpolation(pos);
+        EXPECT_EQ(val1, val2);
     }
 }
 TEST_F(TestLinearInterp, testStencilsMatchFloat) { testStencilsMatch<openvdb::FloatGrid>(); }

@@ -17,7 +17,7 @@
     \details NanoVDB files take on of two formats:
              1) multiple segments each with multiple grids (segments have easy to access metadata about its grids)
              2) starting with verion 32.6.0 nanovdb files also support a raw buffer with one or more grids (just a
-             dump of a raw grid buffer, so no new metadata in headers as when using segments mentioned above).
+             dump of a raw grid buffer, so no new metadata).
 
     // 1: Segment:  FileHeader, MetaData0, gridName0...MetaDataN, gridNameN, compressed Grid0, ... compressed GridN
     // 2: Raw: Grid0, ... GridN
@@ -59,14 +59,10 @@ namespace io {// ===============================================================
 // --------------------------> writeGrid(s) <------------------------------------
 
 /// @brief Write a single grid to file (over-writing existing content of the file)
-///
-/// @note The single grid is written into a single segment, i.e. header with metadata about its type and size.
 template<typename BufferT>
 void writeGrid(const std::string& fileName, const GridHandle<BufferT>& handle, io::Codec codec = io::Codec::NONE, int verbose = 0);
 
 /// @brief Write multiple grids to file (over-writing existing content of the file)
-///
-/// @note The multiple grids are written into the same segment, i.e. header with metadata about all grids
 template<typename BufferT = HostBuffer, template<typename...> class VecT = std::vector>
 void writeGrids(const std::string& fileName, const VecT<GridHandle<BufferT>>& handles, Codec codec = Codec::NONE, int verbose = 0);
 
@@ -97,8 +93,7 @@ template<typename BufferT = HostBuffer>
 GridHandle<BufferT> readGrid(const std::string& fileName, const std::string& gridName, int verbose = 0, const BufferT& buffer = BufferT());
 
 /// @brief Read all the grids in the file and return them as a vector of multiple GridHandles, each containing
-///        all grids encoded in the same segment of the file (i.e. they where written together). This method also
-///        works if the file contains a raw grid buffer in which case a single GridHandle is returned.
+///        all grids encoded in the same segment of the file (i.e. they where written together)
 /// @tparam BufferT Type of buffer used memory allocation
 /// @param fileName string name of file to be read from
 /// @param verbose specify verbosity level. Default value of zero means quiet.
@@ -616,26 +611,20 @@ template<typename BufferT = HostBuffer, template<typename...> class VecT = std::
 VecT<GridHandle<BufferT>> readGrids(std::istream& is, const BufferT& pool = BufferT())
 {
     VecT<GridHandle<BufferT>> handles;
-    try {//first try to read a raw grid buffer
-        GridHandle<BufferT> handle;
-        handle.read(is, pool);// will throw if stream does not contain a raw grid buffer
-        handles.push_back(std::move(handle)); // force move copy assignment
-    } catch(const std::logic_error&) {
-        Segment seg;
-        while (seg.read(is)) {
-            uint64_t bufferSize = 0;
-            for (auto& m : seg.meta) bufferSize += m.gridSize;
-            auto buffer = BufferT::create(bufferSize, &pool);
-            uint64_t bufferOffset = 0;
-            for (uint16_t i = 0; i < seg.header.gridCount; ++i) {
-                auto *data = util::PtrAdd<GridData>(buffer.data(), bufferOffset);
-                Internal::read(is, (char*)data, seg.meta[i].gridSize, seg.header.codec);
-                tools::updateGridCount(data, uint32_t(i), uint32_t(seg.header.gridCount));
-                bufferOffset += seg.meta[i].gridSize;
-            }// loop over grids in segment
-            handles.emplace_back(std::move(buffer)); // force move copy assignment
-        }// loop over segments
-    }
+    Segment seg;
+    while (seg.read(is)) {
+        uint64_t bufferSize = 0;
+        for (auto& m : seg.meta) bufferSize += m.gridSize;
+        auto buffer = BufferT::create(bufferSize, &pool);
+        uint64_t bufferOffset = 0;
+        for (uint16_t i = 0; i < seg.header.gridCount; ++i) {
+            auto *data = util::PtrAdd<GridData>(buffer.data(), bufferOffset);
+            Internal::read(is, (char*)data, seg.meta[i].gridSize, seg.header.codec);
+            tools::updateGridCount(data, uint32_t(i), uint32_t(seg.header.gridCount));
+            bufferOffset += seg.meta[i].gridSize;
+        }// loop over grids in segment
+        handles.emplace_back(std::move(buffer)); // force move copy assignment
+    }// loop over segments
     return handles; // is converted to r-value and return value is move constructed.
 }// readGrids
 
